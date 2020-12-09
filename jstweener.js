@@ -30,6 +30,7 @@ var JSTweener = {
     looping: false,
     frameRate: 60,
     objects: [],
+    requestedObjects: [],
     defaultOptions: {
         time: 1,
         transition: 'easeoutexpo',
@@ -87,14 +88,18 @@ var JSTweener = {
         for (var key in options) {
             if (!o.prefix[key]) o.prefix[key] = '';
             if (!o.suffix[key]) o.suffix[key] = '';
-            var sB = this.toNumber(obj[key], o.prefix[key],  o.suffix[key]);
+            var sB = this.toNumber(obj[key], o.prefix[key], o.suffix[key]);
             o.targetPropeties[key] = {
                 b: sB,
                 c: options[key] - sB
             };
         }
 
-        setTimeout(function() {
+        o.timeout = setTimeout(function() {
+            var index = self.requestedObjects.indexOf(o);
+            if (index > -1)
+                self.requestedObjects.splice(index, 1);
+
             o.startTime = (new Date() - 0);
             o.endTime = o.time * 1000 + o.startTime;
 
@@ -112,6 +117,50 @@ var JSTweener = {
                 self.eventLoop.call(self);
             }
         }, o.delay * 1000);
+
+        this.requestedObjects.push(o);
+    },
+    updateTween: function(obj, options) {
+        for (var o, i=this.objects.length-1; i>=0; i--) {
+            o = this.objects[i];
+            if ( o.target == obj ) {
+                for (var key in options) {
+                    if (!o.prefix[key]) o.prefix[key] = '';
+                    if (!o.suffix[key]) o.suffix[key] = '';
+                    var sB = this.toNumber(obj[key], o.prefix[key], o.suffix[key]);
+                    o.targetPropeties[key].b = sB;
+                    o.targetPropeties[key].c = options[key] - sB;
+                }
+                return;
+            }
+        }
+    },
+    removeTweens: function(obj) {
+        var i;
+        for (i=this.objects.length-1; i>=0; i--) {
+            if ( this.objects[i].target == obj )
+                this.objects.splice(i, 1);
+        }
+        
+        for (i=this.requestedObjects.length-1; i>=0; i--) {
+            if ( this.requestedObjects[i].target == obj ) {
+                clearTimeout(this.requestedObjects[i].timeout);
+                this.requestedObjects.splice(i, 1);
+            }
+       }
+    },
+    isTweening: function(obj) {
+        var i;
+        for (i=this.objects.length-1; i>=0; i--) {
+            if ( this.objects[i].target == obj )
+                return true;
+        }
+        
+        for (i=this.requestedObjects.length-1; i>=0; i--) {
+            if ( this.requestedObjects[i].target == obj )
+                return true;
+        }
+        return false;
     },
     eventLoop: function() {
         var now = (new Date() - 0);
@@ -124,7 +173,7 @@ var JSTweener = {
                 for (var property in o.targetPropeties) {
                     var tP = o.targetPropeties[property];
                     try {
-                        o.target[property] = o.prefix[property] + (tP.b + tP.c) + o.suffix[property];
+                        o.target[property] = (o.prefix[property] == '' && o.suffix[property] == '' ) ? (tP.b + tP.c) : o.prefix[property] + (tP.b + tP.c) + o.suffix[property];
                     } catch(e) {}
                 }
                 this.objects.splice(i, 1);
@@ -150,7 +199,7 @@ var JSTweener = {
                     var val = o.easing(t, tP.b, tP.c, d);
                     try {
                         // FIXME:For IE. A Few times IE (style.width||style.height) = value is throw error...
-                        o.target[property] = o.prefix[property] + val + o.suffix[property];
+                        o.target[property] = (o.prefix[property] == '' && o.suffix[property] == '' ) ? val : o.prefix[property] + val + o.suffix[property];
                     } catch(e) {}
                 }
 
@@ -326,15 +375,15 @@ JSTweener.easingFunctions = {
         return JSTweener.easingFunctions.easeInElastic((t*2)-d, b+c/2, c/2, d, a, p);
     },
     easeInBack: function(t, b, c, d, s) {
-        if(s == undefined) s = 1.70158;
+        if(s === undefined) s = 1.70158;
         return c*(t/=d)*t*((s+1)*t - s) + b;
     },
     easeOutBack: function(t, b, c, d, s) {
-        if(s == undefined) s = 1.70158;
+        if(s === undefined) s = 1.70158;
         return c*((t=t/d-1)*t*((s+1)*t + s) + 1) + b;
     },
     easeInOutBack: function(t, b, c, d, s) {
-        if(s == undefined) s = 1.70158;
+        if(s === undefined) s = 1.70158;
         if((t/=d/2) < 1) return c/2*(t*t*(((s*=(1.525))+1)*t - s)) + b;
         return c/2*((t-=2)*t*(((s*=(1.525))+1)*t + s) + 2) + b;
     },
